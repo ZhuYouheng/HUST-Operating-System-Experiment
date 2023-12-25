@@ -7,6 +7,11 @@
 #include "string.h"
 #include "riscv.h"
 #include "spike_interface/spike_utils.h"
+#define SYMTAB	2
+#define STRTAB	3
+elf_symbol funcs[100]; //each element stores the information of a function(address, type, etc.)
+char func_names[100][32]; //each element stores the name of a function
+int func_count = 0;
 
 typedef struct elf_info_t {
   spike_file_t *f;
@@ -129,7 +134,8 @@ void load_bincode_from_host_elf(process *p) {
 
   // load elf. elf_load() is defined above.
   if (elf_load(&elfloader) != EL_OK) panic("Fail on loading elf.\n");
-
+  // after loading elf, parse all the symbols among which we have the function names we need.
+  parse_symbols(&elfloader);
   // entry (virtual, also physical in lab1_x) address
   p->trapframe->epc = elfloader.ehdr.entry;
 
@@ -137,4 +143,75 @@ void load_bincode_from_host_elf(process *p) {
   spike_file_close( info.f );
 
   sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
+}
+
+void read_shstrtab(char* shstrtab, elf_ctx *ctx)
+{
+  uint64 shstr_offset = ctx->ehdr.shoff + ctx->ehdr.shstrndx * ctx->ehdr.shentsize; //calculate offset
+  section_header shstr_header;
+  elf_fpread(ctx, (void *)&shstr_header, sizeof(shstr_header), shstr_offset);
+  if(shstr_header.sh_size > 398)
+  {
+    panic("Need larger shstrtab string.");
+  }
+  elf_fpread(ctx, shstrtab, shstr_header.sh_size, shstr_header.sh_offset); //read the actual information of this section.
+}
+
+section_header read_symtab(elf_ctx *ctx)
+{
+  section_header symtab;
+  uint16 section_amount = ctx->ehdr.shnum;//get the amount of sections from ctx
+  for(int i=0; i<section_amount; i++)
+  {
+    uint64 current_offset = ctx->ehdr.shoff + i * ctx->ehdr.shentsize;
+    elf_fpread(ctx, (void*)&symtab, sizeof(symtab), current_offset);
+    if(symtab.sh_type==SYMTAB)
+    {
+      return symtab;
+    }
+  }
+  panic("Can't find symtab!");
+}
+
+section_header read_strtab(char* shstrtab, elf_ctx *ctx)
+{
+  section_header strtab;
+  uint16 section_amount = ctx->ehdr.shnum;//get the amount of sections from ctx
+  for(int i=0; i<section_amount; i++)
+  {
+    uint64 current_offset = ctx->ehdr.shoff + i * ctx->ehdr.shentsize;
+    elf_fpread(ctx, (void*)&strtab, sizeof(strtab), current_offset);
+    if(strtab.sh_type==STRTAB && !(strcmp(shstrtab + strtab.sh_name,".strtab")))
+    {
+      return strtab;
+    }
+  }
+  panic("Can't find strtab!");
+}
+
+void find_all_function_names_and_information(section_header symtab_h, section_header strtab_h, elf_ctx *ctx)
+{
+  uint64 symbol_amount = symtab_h.sh_size/sizeof(elf_symbol);
+  for(int i=0; i<symbol_amount; i++)
+  {
+    uint64 current_offset = symtab_h.sh_offset + sizeof(elf_symbol) * i;
+    elf_symbol symbol_temp;
+    elf_fpread(ctx, (void*)&symbol_temp, sizeof(symbol_temp), current_offset);
+    if((symbol_temp.st_info & 0xF) == STT_FUNC) //jusge whether is a function
+    {
+      funcs[func_count] = symbol_temp; //Now we know it is a function.
+      uint64 func_name_offset = strtab_h.sh_offset + symbol_temp.st_name; //the offset of the current function's name in the file.
+      elf_fpread(ctx, (void*)func_names[func_count], 32, func_name_offset);
+      func_count++;
+    }
+  }
+}
+
+void parse_symbols(elf_ctx *ctx)
+{
+  char shstrtab[400]={0};
+  read_shstrtab(shstrtab, ctx); //read shstrtab
+  section_header symtab_h = read_symtab(ctx);
+  section_header strtab_h = read_strtab(shstrtab, ctx);
+  find_all_function_names_and_information(symtab_h, strtab_h, ctx);
 }

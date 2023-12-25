@@ -37,6 +37,32 @@ typedef struct elf_prog_header_t {
   uint64 align;  /* Segment alignment */
 } elf_prog_header;
 
+// Section header structure
+typedef struct section_header_t {
+  uint32 sh_name;      /* Section name (index into the section header string table) */
+  uint32 sh_type;      /* Section type */
+  uint64 sh_flags;     /* Section flags */
+  uint64 sh_addr;      /* Virtual address in memory */
+  uint64 sh_offset;    /* Offset in the file */
+  uint64 sh_size;      /* Size of the section */
+  uint32 sh_link;      /* Link to another section */
+  uint32 sh_info;      /* Additional section information */
+  uint64 sh_addralign; /* Alignment of the section */
+  uint64 sh_entsize;   /* Size of each entry in the section */
+} section_header;
+
+// Symbol table entry structure
+typedef struct elf_symbol_t {
+  uint32 st_name;      /* Symbol name (index into the string table) */
+  uint8  st_info;      /* Type and Binding attributes */
+  uint8  st_other;     /* Reserved (currently set to 0) */
+  uint16 st_shndx;     /* Section index of the symbol */
+  uint64 st_value;     /* Symbol value (virtual address) */
+  uint64 st_size;      /* Size of the symbol */
+} elf_symbol;
+
+#define STT_FUNC 2
+
 #define ELF_MAGIC 0x464C457FU  // "\x7FELF" in little endian
 #define ELF_PROG_LOAD 1
 
@@ -60,4 +86,9 @@ elf_status elf_load(elf_ctx *ctx);
 
 void load_bincode_from_host_elf(process *p);
 
+void parse_symbols(elf_ctx *ctx);
+
+extern elf_symbol funcs[100];
+extern char func_names[100][32];
+extern int func_count;
 #endif
