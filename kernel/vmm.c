@@ -19,12 +19,19 @@
 int map_pages(pagetable_t page_dir, uint64 va, uint64 size, uint64 pa, int perm) {
   uint64 first, last;
   pte_t *pte;
-
-  for (first = ROUNDDOWN(va, PGSIZE), last = ROUNDDOWN(va + size - 1, PGSIZE);
+  //sprint("va_input=%llx\n",va);
+  //bool tempFlag = 1;
+  for (first = ROUNDDOWN(va, PGSIZE), last = ROUNDDOWN(va, PGSIZE) + ROUNDDOWN(size - 1, PGSIZE);
       first <= last; first += PGSIZE, pa += PGSIZE) {
+    //if(tempFlag) {sprint("first=%llx, last=%llx\n",first,last);}
     if ((pte = page_walk(page_dir, first, 1)) == 0) return -1;
+    //if(tempFlag) {sprint("*pte=%llx\n",*pte);tempFlag=0;}
     if (*pte & PTE_V)
+    {
+      //sprint("ERROR first=%lx, last=%lx\n",first,last);
+      //sprint("ERROR *pte=%llx\n",*pte);
       panic("map_pages fails on mapping va (0x%lx) to pa (0x%lx)", first, pa);
+    }
     *pte = PA2PTE(pa) | perm | PTE_V;
   }
   return 0;
