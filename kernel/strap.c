@@ -9,7 +9,7 @@
 #include "pmm.h"
 #include "vmm.h"
 #include "util/functions.h"
-
+#include "memlayout.h"
 #include "spike_interface/spike_utils.h"
 
 //
@@ -59,8 +59,8 @@ void handle_user_page_fault(uint64 mcause, uint64 sepc, uint64 stval) {
       // hint: first allocate a new physical page, and then, maps the new page to the
       // virtual address that causes the page fault.
       //panic( "You need to implement the operations that actually handle the page fault in lab2_3.\n" );
-      // 判断缺页的逻辑地址是否在用户进程逻辑地址空间中的合法范围 default valid
-      if (TRUE) {
+      // 判断缺页的逻辑地址是否在用户进程逻辑地址空间中的合法范围 default valid in lab2_3
+      if (stval < USER_STACK_TOP && stval >= USER_STACK_BASE) { //栈顶，栈底，傻傻分不清楚
         // 获取新的物理页
         void* new_page = alloc_page();
         
@@ -69,7 +69,20 @@ void handle_user_page_fault(uint64 mcause, uint64 sepc, uint64 stval) {
           panic("Failed to map the new page.\n");
         }
       } else {
-        panic("Invalid logical address in user space.\n");
+        //
+        // Step 1: Find the page table entry (PTE) for the given va
+        uint64 pa = lookup_pa(current->pagetable, stval); //也可以使用process.c中的g_ufree_page来进行判断！
+        if(pa == 0) panic("this address is not available!");
+        else{
+            // 获取新的物理页
+          void* new_page = alloc_page();
+          
+          // 将新的物理页映射到导致页错误的虚拟地址 (!!源map函数在处理非4069倍数的va时，for循环结束逻辑有问题，我给改了)
+          if (map_pages(current->pagetable, stval, PGSIZE, (uint64)new_page, prot_to_type(PROT_READ | PROT_WRITE, 1)) != 0) {
+            panic("Failed to map the new page.\n");
+          }
+        }
+        //panic("Invalid logical address in user space.\n");
       }
       break;
     default:

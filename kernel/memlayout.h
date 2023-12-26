@@ -13,8 +13,8 @@
 
 // virtual address of stack top of user process
 #define USER_STACK_TOP 0x7ffff000
-
+#define USER_STACK_BASE 0x7ffeb000
 // start virtual address (4MB) of our simple heap. added @lab2_2
 #define USER_FREE_ADDRESS_START 0x00000000 + PGSIZE * 1024
-
+//
 #endif
