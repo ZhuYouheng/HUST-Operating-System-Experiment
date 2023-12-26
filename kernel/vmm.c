@@ -161,7 +161,7 @@ void *user_va_to_pa(pagetable_t page_dir, void *va) {
   // invalid PTE, and should return NULL.
   //panic( "You have to implement user_va_to_pa (convert user va to pa) to print messages in lab2_1.\n" );
   pte_t *pte = page_walk(page_dir, (uint64)va, 0);
-  if(pte) return (void*) (PTE2PA(*pte) + (((uint64)va) & ((1<<PGSHIFT) -1)));
+  if(pte && (*pte & PTE_V) != 0) return (void*) (PTE2PA(*pte) + (((uint64)va) & ((1<<PGSHIFT) -1)));
   return NULL;
 
 }
@@ -187,6 +187,26 @@ void user_vm_unmap(pagetable_t page_dir, uint64 va, uint64 size, int free) {
   // (use free_page() defined in pmm.c) the physical pages. lastly, invalidate the PTEs.
   // as naive_free reclaims only one page at a time, you only need to consider one page
   // to make user/app_naive_malloc to behave correctly.
-  panic( "You have to implement user_vm_unmap to free pages using naive_free in lab2_2.\n" );
+  //panic( "You have to implement user_vm_unmap to free pages using naive_free in lab2_2.\n" );
+  for (uint64 offset = 0; offset < size; offset += PGSIZE) // Can handle more than one page.
+  { 
+        uint64 current_va = va + offset;
+        // Use page_walk to find the page table entry (PTE) for the current virtual address
+        pte_t *pte = page_walk(page_dir, current_va, 0);
+        // Check if the PTE is valid
+        if (pte != NULL && (*pte & PTE_V) != 0) 
+        {
+            // If the 'free' parameter is not zero, free the corresponding physical page
+            if (free) 
+            {
+                uint64 pa = PTE2PA(*pte);
+                // Use free_page function from pmm.c to free the physical page
+                free_page((void*)pa);
+            }
+
+            // Invalidate the PTE
+            *pte &= ~PTE_V;
+        }
+    }
 
 }
