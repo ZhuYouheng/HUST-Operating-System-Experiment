@@ -96,6 +96,37 @@ ssize_t sys_user_yield() {
   return 0;
 }
 
+extern process procs[NPROC];
+//
+// kerenl entry point of wait. added @lab3_challengbe1
+//
+ssize_t sys_user_wait(int pid)
+{
+  if(pid < -1) return -1;//invalid pid.
+  //search the current process pool for ZOMBIED proccess with pid as given while being current process's children.
+  int result = 0;
+  current->if_waiting = TRUE;
+  current->waiting_pid = pid;
+  for(int i=0; i<NPROC; i++)
+  {
+    if(procs[i].parent == current && procs[i].status == ZOMBIE && (procs[i].pid == pid || pid == -1))
+    {
+      //sprint("A\n");
+      free_process(procs+i);
+      schedule();
+      return procs[i].pid;
+    }
+    if(procs[i].parent == current && (procs[i].pid == pid || pid == -1)) result = 1; 
+  }
+  if(!result) {sprint("not found\n");return -1; }//Can't find the child process of current process that named pid.
+  //Not yet return means no zombie child match the pid. Since pid is valid, it could only be the child process is not yet zombie. Now block the current process.
+  //block_process(current);
+  current->status = BLOCKED;
+  schedule();
+  return pid;
+
+}
+
 //
 // [a0]: the syscall number; [a1] ... [a7]: arguments to the syscalls.
 // returns the code of success, (e.g., 0 means success, fail for otherwise)
@@ -115,6 +146,9 @@ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, l
       return sys_user_fork();
     case SYS_user_yield:
       return sys_user_yield();
+    case SYS_user_wait:
+      //sprint("Start User Wait!\n");
+      return sys_user_wait(a1);
     default:
       panic("Unknown syscall %ld \n", a0);
   }
