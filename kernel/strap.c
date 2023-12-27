@@ -26,7 +26,7 @@ static void handle_syscall(trapframe *tf) {
   // kernel/syscall.c) to conduct real operations of the kernel side for a syscall.
   // IMPORTANT: return value should be returned to user app, or else, you will encounter
   // problems in later experiments!
-  panic( "call do_syscall to accomplish the syscall and lab1_1 here.\n" );
+  tf->regs.a0 = do_syscall(tf->regs.a0,tf->regs.a1,tf->regs.a2,tf->regs.a3,tf->regs.a4,tf->regs.a5,tf->regs.a6,tf->regs.a7);
 
 }
 
@@ -41,7 +41,8 @@ void handle_mtimer_trap() {
   // TODO (lab1_3): increase g_ticks to record this "tick", and then clear the "SIP"
   // field in sip register.
   // hint: use write_csr to disable the SIP_SSIP bit in sip.
-  panic( "lab1_3: increase g_ticks by one, and clear SIP field in sip register.\n" );
+  g_ticks += 1;
+  write_csr(sip, 0);
 
 }
 
@@ -58,8 +59,19 @@ void handle_user_page_fault(uint64 mcause, uint64 sepc, uint64 stval) {
       // dynamically increase application stack.
       // hint: first allocate a new physical page, and then, maps the new page to the
       // virtual address that causes the page fault.
-      panic( "You need to implement the operations that actually handle the page fault in lab2_3.\n" );
-
+      //panic( "You need to implement the operations that actually handle the page fault in lab2_3.\n" );
+      // 判断缺页的逻辑地址是否在用户进程逻辑地址空间中的合法范围 default valid
+      if (TRUE) {
+        // 获取新的物理页
+        void* new_page = alloc_page();
+        
+        // 将新的物理页映射到导致页错误的虚拟地址 (!!源map函数在处理非4069倍数的va时，for循环结束逻辑有问题，我给改了)
+        if (map_pages(current->pagetable, stval, PGSIZE, (uint64)new_page, prot_to_type(PROT_READ | PROT_WRITE, 1)) != 0) {
+          panic("Failed to map the new page.\n");
+        }
+      } else {
+        panic("Invalid logical address in user space.\n");
+      }
       break;
     default:
       sprint("unknown page fault.\n");
