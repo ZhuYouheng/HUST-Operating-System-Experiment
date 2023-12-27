@@ -165,7 +165,7 @@ int free_process( process* proc ) {
   // but for proxy kernel, it (memory leaking) may NOT be a really serious issue,
   // as it is different from regular OS, which needs to run 7x24.
   proc->status = ZOMBIE;
-  if(proc->parent->if_waiting)
+  if(proc->parent && proc->parent->if_waiting) // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!先判空，不然内存错误！！！！！！！！！！！！！！！！！！！！！！！
   {
     if(proc->parent->waiting_pid == proc->pid || proc->parent->waiting_pid == -1)
     {
