@@ -221,3 +221,77 @@ int do_link(char *oldpath, char *newpath) {
 int do_unlink(char *path) {
   return vfs_unlink(path);
 }
+
+//
+// (根据当前进程current的pfiles字段的cwd字段，将工作目录的绝对路径存入path中。)->(直接另外保存cwd字段，不然每次改变cwd，都要重新打开至工作目录，新建很多不需要的dentry。。)
+//
+int do_rcwd(char* path)
+{
+  struct dentry* cwd_entry = current->pfiles->cwd; // 当前工作目录的dentry
+  //char cwd[MAX_PATH_LEN] = {0}; // 用于存储当前工作路径的绝对路径
+  memset(path, 0, MAX_PATH_LEN);
+  //接下来，先找到当前工作路径的绝对路径，并存储到cwd中。
+  struct dentry* cur = cwd_entry;
+  //if(cur->parent) sprint("do_rcwd: parent_name=%s\n",cur->parent->name);
+  while(cur->parent) // 到达根目录/单独考虑
+  {
+    //sprint("do_rcwd: parent_name_inside=%s\n",cur->name);
+    memmove(path + strlen(cur->name) + 2, path, strlen(path) + 1);
+    strcpy(path + 1, cur->name); // 新查到的节点名插入path中
+    path[0] = '/';
+    cur = cur->parent; //查了半天发现这句没写。。。
+  }
+  path[0] = '/';
+  sprint("do_rcwd: name=%s\n",path);
+  return 0;
+}
+
+int do_ccwd(char* path) // Now can only handle absolute path, TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+{
+  char ab_path[MAX_PATH_LEN]={0};
+  get_absolute_path(ab_path, path);
+  struct dentry *parent = vfs_root_dentry; // we start the path lookup from root.
+  char miss_name[MAX_PATH_LEN];
+  // path lookup.
+  struct dentry *file_dentry = lookup_final_dentry(ab_path, &parent, miss_name);
+  current->pfiles->cwd = file_dentry;
+  sprint("do_ccwd: name=%s\n",current->pfiles->cwd->name);
+  return 0;
+}
+
+
+//
+// Get an absolute path
+// ab_path is the final absolute path. ori_path could be a relative path, or it could be an absolute path already,
+// in which case ori_path will be directly copied to ab_path.
+//
+void get_absolute_path(char* ab_path, char* ori_path)
+{
+  if(ori_path[0]!='.')//ori_path is already an absolute path
+  {
+    memcpy(ab_path, ori_path, MAX_PATH_LEN);
+    return;
+  }
+  char cwd[MAX_PATH_LEN] = {0}; // 用于存储当前工作路径的绝对路径
+  do_rcwd(cwd); //调用rcwd，得到工作目录的绝对路径。
+  int cwd_len = strlen(cwd);
+  //先处理..开头的情况
+  if(ori_path[1]=='.')
+  {
+    int last_slash = 0;
+    for(;cwd[cwd_len - last_slash - 1]!='/'; last_slash++);
+    strcpy(cwd + cwd_len - last_slash, ori_path + 3);
+  }
+  else if(cwd_len == 1) //.开头，cwd为根目录
+  {
+    strcpy(cwd + 1, ori_path + 2);
+  }
+  else//.开头，cwd不为根目录
+  {
+    strcpy(cwd + cwd_len + 1, ori_path + 2);
+    cwd[cwd_len] = '/';
+  }
+  sprint("get_absolute_path: %s\n", cwd);
+  strcpy(ab_path, cwd);
+
+}
