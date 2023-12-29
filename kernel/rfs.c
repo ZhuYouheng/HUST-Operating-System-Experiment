@@ -494,7 +494,11 @@ struct vinode *rfs_create(struct vinode *parent, struct dentry *sub_dentry) {
   // nlinks, i.e., the number of links.
   // blocks, i.e., its block count.
   // Note: DO NOT DELETE CODE BELOW PANIC.
-  panic("You need to implement the code of populating a disk inode in lab4_1.\n" );
+  //panic("You need to implement the code of populating a disk inode in lab4_1.\n" );
+  free_dinode->size = 0; 
+  free_dinode->type = R_FILE;
+  free_dinode->nlinks = 1;
+  free_dinode->blocks = 0;
 
   // DO NOT REMOVE ANY CODE BELOW.
   // allocate a free block for the file
@@ -591,7 +595,32 @@ int rfs_link(struct vinode *parent, struct dentry *sub_dentry, struct vinode *li
   //    rfs_add_direntry here.
   // 3) persistent the changes to disk. you can use rfs_write_back_vinode here.
   //
-  panic("You need to implement the code for creating a hard link in lab4_3.\n" );
+  //panic("You need to implement the code for creating a hard link in lab4_3.\n" );
+    // 1. Get the name of the new link file
+  const char *link_name = sub_dentry->name;
+
+  // 2. Increase the link count of the existing file
+  link_node->nlinks++;
+
+  // 3. Add the new link file as a directory entry to its parent directory
+  int result = rfs_add_direntry(parent, link_name, link_node->inum);
+  if (result != 0) {
+    // Handle error, e.g., by decrementing the link count back to the original value
+    link_node->nlinks--;
+    return result;
+  }
+
+  // 4. Write back the changes to disk
+  result = rfs_write_back_vinode(link_node);
+  if (result != 0) {
+    // Handle error, e.g., by decrementing the link count back to the original value
+    link_node->nlinks--;
+    // Remove the added directory entry
+    // Note: You may need to implement a function to remove a directory entry
+    // and call it here if rfs_add_direntry was successful before the write back failed.
+    return result;
+  }
+  return 0;
 }
 
 //
@@ -787,7 +816,9 @@ int rfs_readdir(struct vinode *dir_vinode, struct dir *dir, int *offset) {
   // the method of returning is to popular proper members of "dir", more specifically,
   // dir->name and dir->inum.
   // note: DO NOT DELETE CODE BELOW PANIC.
-  panic("You need to implement the code for reading a directory entry of rfs in lab4_2.\n" );
+  //panic("You need to implement the code for reading a directory entry of rfs in lab4_2.\n" );
+  strcpy(dir->name, p_direntry->name); // dir->name
+  dir->inum = p_direntry->inum; //dir->inum.
 
   // DO NOT DELETE CODE BELOW.
   (*offset)++;
