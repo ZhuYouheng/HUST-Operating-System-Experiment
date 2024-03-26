@@ -1,6 +1,7 @@
 #include "kernel/riscv.h"
 #include "kernel/process.h"
 #include "spike_interface/spike_utils.h"
+#include "string.h"
 
 static void handle_instruction_access_fault() { panic("Instruction access fault!"); }
 
@@ -8,7 +9,9 @@ static void handle_load_access_fault() { panic("Load access fault!"); }
 
 static void handle_store_access_fault() { panic("Store/AMO access fault!"); }
 
-static void handle_illegal_instruction() { panic("Illegal instruction!"); }
+void print_error_info();
+void print_error_code();
+static void handle_illegal_instruction() { print_error_info(); panic("Illegal instruction!"); }
 
 static void handle_misaligned_load() { panic("Misaligned Load!"); }
 
@@ -61,4 +64,67 @@ void handle_mtrap() {
       panic( "unexpected exception happened in M-mode.\n" );
       break;
   }
+}
+
+void print_error_info()
+{
+  // "process->line" stores all relationships map instruction addresses to code line numbers
+  addr_line* error_line = current->line;
+  uint64 error_addr = read_csr(mepc);
+  int line_id = 0;
+  while(error_line->addr != error_addr)
+  {
+    line_id++;error_line++;
+    if(line_id == current->line_ind)
+    {
+      panic("Can't find error line for current address.\n");
+    }
+  }
+  code_file* error_file = current->file + error_line->file;
+  char* error_dic = *(current->dir + error_file->dir); //error dic name
+  char* error_file_name = error_file->file; //errror file name
+  int error_line_id = error_line->line;
+  sprint("Runtime error at %s/%s:%d\n",error_dic ,error_file_name, error_line_id);
+  print_error_code(error_dic, error_file_name, error_line_id);
+}
+
+void print_error_code(char* error_dic, char* error_file_name, int error_line_id)
+{
+  char path[50] = {};
+  char code_file[1000] = {};
+  //char dest_code[50] = {};
+  int dic_len = strlen(error_dic);
+  strcpy(path, error_dic);
+  strcpy(path + 1 + dic_len, error_file_name);
+  path[dic_len] = '/';
+  spike_file_t* spike_error_file = spike_file_open(path, O_RDONLY, 0);
+  //first read code file
+  spike_file_pread(spike_error_file, (void*)code_file,sizeof(code_file),0);
+  int cursor = 0;
+  int line_count = 1;
+  while(cursor < sizeof(code_file))
+  {
+    if(1 == error_line_id)
+    {
+      break;
+    }
+    if(code_file[cursor++] == '\n')
+    {
+      line_count++;
+      if(line_count == error_line_id)
+      {
+        int i;
+        for(i = 0; code_file[cursor+i]!='\n' && code_file[cursor+i]!='\0';i++);
+        code_file[cursor+i] = '\0';
+        break;
+      }
+    }
+  }
+  if(cursor == sizeof(code_file))
+  {
+    panic("target error code not found!\n");
+  }
+  //print error code
+  sprint("%s\n",code_file + cursor);
+  spike_file_close(spike_error_file);
 }

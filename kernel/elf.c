@@ -247,7 +247,7 @@ static size_t parse_args(arg_buf *arg_bug_msg) {
   //returns the number of strings after PKE kernel in command line
   return pk_argc - arg;
 }
-
+elf_status elf_load_debug(elf_ctx *ctx);
 //
 // load the elf of user application, by using the spike file interface.
 //
@@ -276,7 +276,7 @@ void load_bincode_from_host_elf(process *p) {
 
   // load elf. elf_load() is defined above.
   if (elf_load(&elfloader) != EL_OK) panic("Fail on loading elf.\n");
-
+  if(elf_load_debug(&elfloader) != EL_OK) panic("Fail on load .debug_line\n");
   // entry (virtual, also physical in lab1_x) address
   p->trapframe->epc = elfloader.ehdr.entry;
 
@@ -284,4 +284,28 @@ void load_bincode_from_host_elf(process *p) {
   spike_file_close( info.f );
 
   sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
+}
+
+elf_status elf_load_debug(elf_ctx *ctx){
+    elf_sect_header strtab_header, current_section_header, debugLine_header;
+    // read all section names
+    elf_fpread(ctx,(void*)&strtab_header,sizeof(strtab_header),ctx->ehdr.shoff + ctx->ehdr.shstrndx * sizeof(elf_sect_header));
+    char section_name[strtab_header.size];
+    elf_fpread(ctx,section_name,strtab_header.size,strtab_header.offset);
+
+    for(int i = 0;i < ctx->ehdr.shnum;i++)
+    {
+        elf_fpread(ctx,(void*)&current_section_header,sizeof(current_section_header),ctx->ehdr.shoff + i * sizeof(elf_sect_header));
+        if(strcmp(section_name + current_section_header.name,".debug_line") == 0)
+        {
+            debugLine_header = current_section_header;
+            break;
+        }
+    }
+    static char debug_line[MAX_DEBUG_LINE_SIZE];
+    if(elf_fpread(ctx,(void*)debug_line,debugLine_header.size,debugLine_header.offset) != debugLine_header.size) {
+        panic("Fail on read debug_line\n");
+    }
+    make_addr_line(ctx,debug_line,debugLine_header.size);
+    return EL_OK;
 }
