@@ -1,7 +1,7 @@
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
-// we use two HART (cpu) in challenge3
+// we use only one HART (cpu) in fundamental experiments
 #define NCPU 2
 
 //interval of timer interrupt. added @lab1_3
@@ -18,6 +18,13 @@
 #define USER_KSTACK 0x81200000
 
 // the trap frame used to assemble the user "process"
-#define USER_TRAP_FRAME 0x81300000
+#define USER_TRAP_FRAME0 0x81300000
+
+#define USER_TRAP_FRAME1 0x81400000
+
+#define USER_STACK1 0x81500000
+
+#define USER_KSTACK1 0x81600000
+
 
 #endif
