@@ -71,6 +71,7 @@ void load_user_program(process *proc) {
   // here, we assume that the size of usertrap.S is smaller than a page.
   user_vm_map((pagetable_t)proc->pagetable, (uint64)trap_sec_start, PGSIZE, (uint64)trap_sec_start,
          prot_to_type(PROT_READ | PROT_EXEC, 0));
+  proc->allocd_MR_cursor = proc->free_MR_cursor = 0;
 }
 
 //

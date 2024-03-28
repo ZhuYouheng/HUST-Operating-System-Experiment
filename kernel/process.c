@@ -64,3 +64,70 @@ void switch_to(process* proc) {
   // note, return_to_user takes two parameters @ and after lab2_1.
   return_to_user(proc->trapframe, user_satp);
 }
+uint64 alloc_va(uint64 size) {
+  // 查找未分配列表中第一个能够容纳所需大小的项
+  int index = 0;
+  while (index < current->free_MR_cursor && current->free_MR_list[index].sz < size) {
+      index++;
+  }
+  // 如果未找到合适的空间，返回0
+  if (index == current->free_MR_cursor) {
+      return 0;
+  }
+  // 获取分配的虚拟地址
+  uint64 va = current->free_MR_list[index].va;
+  // 更新未分配列表
+  if (current->free_MR_list[index].sz > size) {
+      // 如果剩余空间大于所需大小，更新未分配列表项
+      current->free_MR_list[index].sz -= size;
+      current->free_MR_list[index].va += size;
+  }
+  else {
+    // 如果剩余空间等于所需大小，移除当前项
+    int i = index;
+    while (i < current->free_MR_cursor - 1) {
+    current->free_MR_list[i] = current->free_MR_list[i + 1];
+    i++; 
+    }
+
+      current->free_MR_cursor--;
+  }
+  // 更新已分配列表
+  current->allocd_MR_list[current->allocd_MR_cursor].va = va;
+  current->allocd_MR_list[current->allocd_MR_cursor].sz = size;
+  current->allocd_MR_cursor++;
+
+  return va;
+}
+
+// 将空间添加到未分配列表中
+void add_to_free_MR_list(uint64 va, uint64 size) {
+    int index = 0;
+
+    // 寻找要插入的位置
+    while (index < current->free_MR_cursor && va > current->free_MR_list[index].va) {
+        index++;
+    }
+
+    // 如果插入位置与前一个未分配空间相邻，合并两者
+    if (index > 0 && current->free_MR_list[index - 1].va + current->free_MR_list[index - 1].sz == va) {
+        current->free_MR_list[index - 1].sz += size;
+    } else {
+        // 否则，插入新的未分配空间
+        for (int i = current->free_MR_cursor; i > index; i--) {
+            current->free_MR_list[i] = current->free_MR_list[i - 1];
+        }
+        current->free_MR_list[index].va = va;
+        current->free_MR_list[index].sz = size;
+        current->free_MR_cursor++;
+    }
+
+    // 如果插入位置与后一个未分配空间相邻，合并两者
+    if (index < current->free_MR_cursor - 1 && va + size == current->free_MR_list[index + 1].va) {
+        current->free_MR_list[index].sz += current->free_MR_list[index + 1].sz;
+        for (int i = index + 1; i < current->free_MR_cursor - 1; i++) {
+            current->free_MR_list[i] = current->free_MR_list[i + 1];
+        }
+        current->free_MR_cursor--;
+    }
+}
