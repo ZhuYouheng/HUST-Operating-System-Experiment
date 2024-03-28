@@ -15,7 +15,8 @@
 #include "sched.h"
 
 #include "spike_interface/spike_utils.h"
-
+Semaphore sem_list[5];
+int count = 0;
 //
 // implement the SYS_user_print syscall
 //
@@ -97,6 +98,55 @@ ssize_t sys_user_yield() {
 }
 
 //
+// kerenl entry point of sem_functions. added @lab3_ch2
+//
+// 创建新的信号量
+uint64 sys_user_sem_new(uint64 semaphore) {
+    if (count >= 5)
+        panic("semaphore list is full\n"); // 信号量列表已满，产生错误
+    sem_list[count].sem = semaphore;
+    return count++;
+}
+
+// P操作
+uint64 sys_user_sem_P(int pd) {
+    Semaphore* sem = &sem_list[pd];
+    sem->sem--;
+    if (sem->sem >= 0)
+        return 0; // 如果信号量的值仍然大于等于0，则返回0表示P操作成功
+
+    // 如果信号量的值小于0，则将当前进程加入到等待队列中，并阻塞当前进程
+    int i;
+    for (i = 0; i < 5; i++) {
+        if (sem->wait[i] == NULL) {
+            sem->wait[i] = current;
+            break;
+        }
+    }
+    if (i == 5)
+        panic("fail on sys_user_sem_P\n"); // 等待队列已满，产生错误
+    insert_to_block_queue(current);
+    schedule();
+    return 0;
+}
+
+// V操作
+uint64 sys_user_sem_V(int pd) {
+    Semaphore* sem = &sem_list[pd];
+    sem->sem++;
+    if (sem->sem <= 0) {
+        // 如果信号量的值小于等于0，则唤醒等待队列中的进程
+        for (int i = 0; i < 5; i++) {
+            if (sem->wait[i] != NULL) {
+                schedule_b(sem->wait[i]);
+                sem->wait[i] = NULL;
+            }
+        }
+    }
+    return 0;
+}
+
+//
 // [a0]: the syscall number; [a1] ... [a7]: arguments to the syscalls.
 // returns the code of success, (e.g., 0 means success, fail for otherwise)
 //
@@ -115,6 +165,12 @@ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, l
       return sys_user_fork();
     case SYS_user_yield:
       return sys_user_yield();
+    case SYS_user_sem_new:
+        return sys_user_sem_new(a1);
+    case SYS_user_sem_P:
+        return sys_user_sem_P(a1);
+    case SYS_user_sem_V:
+        return sys_user_sem_V(a1);
     default:
       panic("Unknown syscall %ld \n", a0);
   }

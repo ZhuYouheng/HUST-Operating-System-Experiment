@@ -76,3 +76,24 @@ int fork() {
 void yield() {
   do_user_call(SYS_user_yield, 0, 0, 0, 0, 0, 0, 0);
 }
+
+//
+// lib call to sem new
+//
+int sem_new(int semaphore){
+    return do_user_call(SYS_user_sem_new, semaphore, 0, 0, 0, 0, 0, 0);
+}
+
+//
+// lib call to sem P
+//
+void sem_P(int semaphore_id){
+    do_user_call(SYS_user_sem_P, semaphore_id, 0, 0, 0, 0, 0, 0);
+}
+
+//
+// lib call to sem V
+//
+void sem_V(int semaphore_id){
+    do_user_call(SYS_user_sem_V, semaphore_id, 0, 0, 0, 0, 0, 0);
+}

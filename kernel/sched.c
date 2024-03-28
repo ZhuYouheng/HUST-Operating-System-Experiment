@@ -6,6 +6,7 @@
 #include "spike_interface/spike_utils.h"
 
 process* ready_queue_head = NULL;
+process* block_queue_head = NULL;
 
 //
 // insert a process, proc, into the END of ready queue.
@@ -34,6 +35,29 @@ void insert_to_ready_queue( process* proc ) {
 
   return;
 }
+void insert_to_block_queue(process* proc) {
+    if (block_queue_head == NULL) {
+        // 如果阻塞队列为空，则将进程直接插入到队列头部
+        proc->status = BLOCKED;
+        proc->queue_next = NULL;
+        block_queue_head = proc;
+    } else {
+        // 如果阻塞队列不为空，则遍历队列，查看进程是否已经在队列中
+        process* p = block_queue_head;
+        while (p->queue_next != NULL) {
+            if (p == proc)
+                return; // 进程已在队列中
+            p = p->queue_next;
+        }
+        // 将进程插入到队列尾部
+        if (p != proc) {
+            p->queue_next = proc;
+            proc->status = BLOCKED;
+            proc->queue_next = NULL;
+        }
+    }
+}
+
 
 //
 // choose a proc from the ready queue, and put it to run.
@@ -63,6 +87,7 @@ void schedule() {
     }
   }
 
+
   current = ready_queue_head;
   assert( current->status == READY );
   ready_queue_head = ready_queue_head->queue_next;
@@ -70,4 +95,32 @@ void schedule() {
   current->status = RUNNING;
   sprint( "going to schedule process %d to run.\n", current->pid );
   switch_to( current );
+}
+
+void schedule_b(process* proc) {
+    if (!block_queue_head)
+        return; // 如果阻塞队列为空，则直接返回
+
+    process* p = block_queue_head;
+    process* prev = NULL;
+
+    // 寻找要调度的进程在阻塞队列中的位置
+    while (p && p != proc) {
+        prev = p;
+        p = p->queue_next;
+    }
+
+    if (!p) {
+        panic("fail on schedule_block"); // 如果未找到要调度的进程，则产生错误
+        return;
+    }
+
+    // 从阻塞队列中移除要调度的进程
+    if (prev)
+        prev->queue_next = p->queue_next;
+    else
+        block_queue_head = p->queue_next;
+
+    // 将要调度的进程插入到就绪队列中
+    insert_to_ready_queue(proc);
 }
