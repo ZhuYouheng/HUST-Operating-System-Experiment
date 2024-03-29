@@ -13,4 +13,11 @@
 // the ending physical address that PKE observes. added @lab2_1
 #define PHYS_TOP (DRAM_BASE + PKE_MAX_ALLOWABLE_RAM)
 
+#define USER_TRAP_FRAME0 0x81300000
+
+#define USER_TRAP_FRAME1 0x81400000
+
+#define USER_STACK1 0x81500000
+
+#define USER_KSTACK1 0x81600000
 #endif

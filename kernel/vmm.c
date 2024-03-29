@@ -10,6 +10,9 @@
 #include "util/string.h"
 #include "spike_interface/spike_utils.h"
 #include "util/functions.h"
+#include "spike_interface/atomic.h"
+
+spinlock_t vm_lock;
 
 /* --- utility functions for virtual address mapping --- */
 //
@@ -17,6 +20,7 @@
 // with the permission of "perm".
 //
 int map_pages(pagetable_t page_dir, uint64 va, uint64 size, uint64 pa, int perm) {
+  spinlock_lock(&vm_lock);
   uint64 first, last;
   pte_t *pte;
   //sprint("va_input=%llx\n",va);
@@ -34,6 +38,7 @@ int map_pages(pagetable_t page_dir, uint64 va, uint64 size, uint64 pa, int perm)
     }
     *pte = PA2PTE(pa) | perm | PTE_V;
   }
+  spinlock_unlock(&vm_lock);
   return 0;
 }
 
