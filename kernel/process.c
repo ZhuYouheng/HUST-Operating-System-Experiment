@@ -17,6 +17,7 @@
 #include "memlayout.h"
 #include "sched.h"
 #include "spike_interface/spike_utils.h"
+#include "util/functions.h"
 
 //Two functions defined in kernel/usertrap.S
 extern char smode_trap_vector[];
@@ -184,19 +185,18 @@ int do_fork( process* parent)
     // browse parent's vm space, and copy its trapframe and data segments,
     // map its code segment.
     switch( parent->mapped_info[i].seg_type ){
-      case CONTEXT_SEGMENT:
+      case CONTEXT_SEGMENT: {
         *child->trapframe = *parent->trapframe;
-        break;
-      case STACK_SEGMENT:
+      } break;
+      case STACK_SEGMENT: {
         memcpy( (void*)lookup_pa(child->pagetable, child->mapped_info[STACK_SEGMENT].va),
           (void*)lookup_pa(parent->pagetable, parent->mapped_info[i].va), PGSIZE );
-        break;
-      case HEAP_SEGMENT:
+      } break;
+      case HEAP_SEGMENT: {
         // build a same heap for child process.
 
         // convert free_pages_address into a filter to skip reclaimed blocks in the heap
         // when mapping the heap blocks
-        {
           int free_block_filter[MAX_HEAP_PAGES];
           memset(free_block_filter, 0, MAX_HEAP_PAGES);
           uint64 heap_bottom = parent->user_heap.heap_bottom;
@@ -211,19 +211,19 @@ int do_fork( process* parent)
             if (free_block_filter[(heap_block - heap_bottom) / PGSIZE])  // skip free blocks
               continue;
 
-            void* child_pa = alloc_page();
-            memcpy(child_pa, (void*)lookup_pa(parent->pagetable, heap_block), PGSIZE);
-            user_vm_map((pagetable_t)child->pagetable, heap_block, PGSIZE, (uint64)child_pa,
-                        prot_to_type(PROT_WRITE | PROT_READ, 1));
+          void* parent_pa = (void*)lookup_pa(parent->pagetable, heap_block);
+          // void* child_pa = alloc_page();
+          // memcpy(child_pa, (void*)lookup_pa(parent->pagetable, heap_block), PGSIZE);
+          user_vm_map((pagetable_t)child->pagetable, heap_block, PGSIZE, (uint64)parent_pa,
+                      prot_to_type(PROT_READ|PROT_COW, 1));
           }
 
           child->mapped_info[HEAP_SEGMENT].npages = parent->mapped_info[HEAP_SEGMENT].npages;
 
-          // copy the heap manager from parent to child
-          memcpy((void*)&child->user_heap, (void*)&parent->user_heap, sizeof(parent->user_heap));
-          break;
-        }
-      case CODE_SEGMENT:
+        // copy the heap manager from parent to child
+        memcpy((void*)&child->user_heap, (void*)&parent->user_heap, sizeof(parent->user_heap));
+      } break;
+      case CODE_SEGMENT: {
         // TODO (lab3_1): implment the mapping of child code segment to parent's
         // code segment.
         // hint: the virtual address mapping of code segment is tracked in mapped_info
@@ -238,6 +238,7 @@ int do_fork( process* parent)
         uint64 parent_pagesize = parent->mapped_info[CODE_SEGMENT].npages * PGSIZE;
         pte_t *pte = page_walk(parent->pagetable, parent_va, 0); 
         uint64 parent_pa = PTE2PA(*pte);
+        sprint("do_fork map code segment at pa:%lx of parent to child at va:%lx.\n", parent_pa, parent_va);
         user_vm_map(child->pagetable, parent_va, parent_pagesize, parent_pa, prot_to_type(PROT_READ | PROT_EXEC, 1));
 
         // after mapping, register the vm region (do not delete codes below!)
@@ -246,7 +247,7 @@ int do_fork( process* parent)
           parent->mapped_info[i].npages;
         child->mapped_info[child->total_mapped_region].seg_type = CODE_SEGMENT;
         child->total_mapped_region++;
-        break;
+      } break;
     }
   }
 
