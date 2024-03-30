@@ -14,7 +14,7 @@
 #include "vmm.h"
 #include "sched.h"
 #include "proc_file.h"
-
+#include "elf.h"
 #include "spike_interface/spike_utils.h"
 
 //
@@ -215,6 +215,68 @@ ssize_t sys_user_unlink(char * vfn){
   return do_unlink(pfn);
 }
 
+
+ssize_t sys_user_exec(const char *path, const char *parameter) {
+    // 分配一个新的进程结构体
+    process* new_proc = alloc_process(1);
+
+    // 交换当前进程和新进程的PID和父进程指针
+    uint64 tmp_pid = new_proc->pid;
+    new_proc->pid = current->pid;
+    current->pid = tmp_pid;
+
+    process* tmp_parent = new_proc->parent;
+    new_proc->parent = current->parent;
+    current->parent = tmp_parent;
+
+    // 执行程序并获取参数数量
+    int argc = exec(new_proc,(char*) user_va_to_pa(current->pagetable,(void*)path),(char *) user_va_to_pa(current->pagetable,(void*)parameter));
+
+    // 保存当前进程指针，并将当前进程指针指向新进程
+    process* tmp_proc = current;
+    current = new_proc;
+
+    // 释放之前的进程结构体
+    free_process(tmp_proc);
+
+    // 切换到新进程
+    current->trapframe->regs.a0 = argc;
+    switch_to(current);
+
+    return 0;
+}
+
+extern process procs[NPROC];
+//
+// kerenl entry point of wait. added @lab3_challengbe1
+//
+ssize_t sys_user_wait(int pid)
+{
+  if(pid < -1) return -1;//invalid pid.
+  //search the current process pool for ZOMBIED proccess with pid as given while being current process's children.
+  int result = 0;
+  current->if_waiting = TRUE;
+  current->waiting_pid = pid;
+  for(int i=0; i<NPROC; i++)
+  {
+    if(procs[i].parent == current && procs[i].status == ZOMBIE && (procs[i].pid == pid || pid == -1))
+    {
+      //sprint("A\n");
+      free_process(procs+i);
+      schedule();
+      return procs[i].pid;
+    }
+    if(procs[i].parent == current && (procs[i].pid == pid || pid == -1)) result = 1; 
+  }
+  if(!result) {sprint("not found\n");return -1; }//Can't find the child process of current process that named pid.
+  //Not yet return means no zombie child match the pid. Since pid is valid, it could only be the child process is not yet zombie. Now block the current process.
+  //block_process(current);
+  current->status = BLOCKED;
+  schedule();
+  return pid;
+
+}
+
 //
 // [a0]: the syscall number; [a1] ... [a7]: arguments to the syscalls.
 // returns the code of success, (e.g., 0 means success, fail for otherwise)
@@ -263,6 +325,11 @@ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, l
       return sys_user_link((char *)a1, (char *)a2);
     case SYS_user_unlink:
       return sys_user_unlink((char *)a1);
+    case SYS_user_exec:
+      return sys_user_exec((char *)a1,(char *)a2);
+    case SYS_user_wait:
+      //sprint("Start User Wait!\n");
+      return sys_user_wait(a1);
     default:
       panic("Unknown syscall %ld \n", a0);
   }

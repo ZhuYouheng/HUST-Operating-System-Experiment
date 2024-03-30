@@ -65,4 +65,6 @@ elf_status elf_load(elf_ctx *ctx);
 
 void load_bincode_from_host_elf(process *p, char *filename);
 
+int exec(process* p, const char *path, const char *para);
+
 #endif

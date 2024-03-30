@@ -93,6 +93,11 @@ typedef struct process_t {
 
   // file system. added @lab4_1
   proc_file_management *pfiles;
+
+    // wait pid
+  int waiting_pid; //pid=-1: waiting for any. pid=else x: waiting for x
+  //flag for whether under waiting process
+  int if_waiting ;
 }process;
 
 // switch to run user app
@@ -101,7 +106,7 @@ void switch_to(process*);
 // initialize process pool (the procs[] array)
 void init_proc_pool();
 // allocate an empty process, init its vm space. returns its pid
-process* alloc_process();
+process* alloc_process(int mod);
 // reclaim a process, destruct its vm space and free physical pages.
 int free_process( process* proc );
 // fork a child from parent
@@ -109,5 +114,5 @@ int do_fork(process* parent);
 
 // current running process
 extern process* current;
-
+void block_process(process* proc);
 #endif

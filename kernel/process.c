@@ -86,12 +86,16 @@ void init_proc_pool() {
 // allocate an empty process, init its vm space. returns the pointer to
 // process strcuture. added @lab3_1
 //
-process* alloc_process() {
+process* alloc_process(int mod) {
   // locate the first usable process structure
   int i;
 
   for( i=0; i<NPROC; i++ )
-    if( procs[i].status == FREE ) break;
+    if( procs[i].status == FREE )
+    {
+      procs[i].pid = i;
+       break;
+    }
 
   if( i>=NPROC ){
     panic( "cannot find any free process structure.\n" );
@@ -135,7 +139,7 @@ process* alloc_process() {
   procs[i].mapped_info[SYSTEM_SEGMENT].va = (uint64)trap_sec_start;
   procs[i].mapped_info[SYSTEM_SEGMENT].npages = 1;
   procs[i].mapped_info[SYSTEM_SEGMENT].seg_type = SYSTEM_SEGMENT;
-
+  if(mod == 0)
   sprint("in alloc_proc. user frame 0x%lx, user stack 0x%lx, user kstack 0x%lx \n",
     procs[i].trapframe, procs[i].trapframe->regs.sp, procs[i].kstack);
 
@@ -152,9 +156,11 @@ process* alloc_process() {
   procs[i].total_mapped_region = 4;
 
   // initialize files_struct
+  //if(mod == 0)
   procs[i].pfiles = init_proc_file_management();
+  if(mod == 0)
   sprint("in alloc_proc. build proc_file_management successfully.\n");
-
+  procs[i].if_waiting = FALSE;
   // return after initialization.
   return &procs[i];
 }
@@ -169,6 +175,16 @@ int free_process( process* proc ) {
   // as it is different from regular OS, which needs to run 7x24.
   proc->status = ZOMBIE;
 
+  if(proc->parent&&proc->parent->if_waiting  )
+  {
+    if(proc->parent->waiting_pid == proc->pid || proc->parent->waiting_pid == -1)
+    {
+      proc->parent->if_waiting = FALSE;
+      proc->parent->status = READY;
+      insert_to_ready_queue(proc->parent);
+      proc->status = FREE; //Directly release.
+    }
+  }
   return 0;
 }
 
@@ -182,7 +198,7 @@ int free_process( process* proc ) {
 int do_fork( process* parent)
 {
   sprint( "will fork a child from parent %d.\n", parent->pid );
-  process* child = alloc_process();
+  process* child = alloc_process(0);
 
   for( int i=0; i<parent->total_mapped_region; i++ ){
     // browse parent's vm space, and copy its trapframe and data segments,
@@ -191,11 +207,11 @@ int do_fork( process* parent)
       case CONTEXT_SEGMENT:
         *child->trapframe = *parent->trapframe;
         break;
-      case STACK_SEGMENT:
+      case STACK_SEGMENT:{
         memcpy( (void*)lookup_pa(child->pagetable, child->mapped_info[STACK_SEGMENT].va),
           (void*)lookup_pa(parent->pagetable, parent->mapped_info[i].va), PGSIZE );
-        break;
-      case HEAP_SEGMENT:
+      }  break;
+      case HEAP_SEGMENT:{
         // build a same heap for child process.
 
         // convert free_pages_address into a filter to skip reclaimed blocks in the heap
@@ -224,8 +240,8 @@ int do_fork( process* parent)
 
         // copy the heap manager from parent to child
         memcpy((void*)&child->user_heap, (void*)&parent->user_heap, sizeof(parent->user_heap));
-        break;
-      case CODE_SEGMENT:
+      }  break;
+      case CODE_SEGMENT:{
         // TODO (lab3_1): implment the mapping of child code segment to parent's
         // code segment.
         // hint: the virtual address mapping of code segment is tracked in mapped_info
@@ -241,14 +257,14 @@ int do_fork( process* parent)
         pte_t *pte = page_walk(parent->pagetable, parent_va, 0); 
         uint64 parent_pa = PTE2PA(*pte);
         user_vm_map(child->pagetable, parent_va, parent_pagesize, parent_pa, prot_to_type(PROT_READ | PROT_EXEC, 1));
-
+        sprint("do_fork map code segment at pa:%lx of parent to child at va:%lx.\n", lookup_pa(parent->pagetable,parent->mapped_info[i].va),parent->mapped_info[i].va);
         // after mapping, register the vm region (do not delete codes below!)
         child->mapped_info[child->total_mapped_region].va = parent->mapped_info[i].va;
         child->mapped_info[child->total_mapped_region].npages =
           parent->mapped_info[i].npages;
         child->mapped_info[child->total_mapped_region].seg_type = CODE_SEGMENT;
         child->total_mapped_region++;
-        break;
+      }  break;
     }
   }
 
@@ -258,4 +274,37 @@ int do_fork( process* parent)
   insert_to_ready_queue( child );
 
   return child->pid;
+}
+
+
+extern process* ready_queue_head;
+void block_process(process* proc) // set the status of a proc to BLOCKED.
+{
+  sprint("Going to block process %d\n",proc->pid);
+  assert(proc->status == READY || proc->status == RUNNING);
+  if(proc->status == READY)
+  {
+    process* temp = ready_queue_head;
+    process* temp_b = ready_queue_head;
+    if(temp == proc)
+    {
+      ready_queue_head = ready_queue_head->queue_next;
+      proc->status == BLOCKED;
+    }
+    else
+    {
+      temp = temp->queue_next;
+      while(temp!=proc)
+      {
+        temp = temp->queue_next;
+        temp_b = temp_b->queue_next;
+      }
+      temp_b->queue_next = temp->queue_next;
+      temp->status = BLOCKED;
+    }
+  }
+  else
+  {
+    proc->status = BLOCKED;
+  }
 }

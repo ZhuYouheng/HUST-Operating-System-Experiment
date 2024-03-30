@@ -33,7 +33,7 @@ void fs_init(void) {
   rfs_format_dev(ramdisk0);
   vfs_mount("RAMDISK0", MOUNT_DEFAULT);
 }
-
+int count = 1;
 //
 // initialize a proc_file_management data structure for a process.
 // return the pointer to the page containing the data structure.
@@ -45,8 +45,9 @@ proc_file_management *init_proc_file_management(void) {
 
   for (int fd = 0; fd < MAX_FILES; ++fd)
     pfiles->opened_files[fd].status = FD_NONE;
-
+  if(count++ == 0)
   sprint("FS: created a file management struct for a process.\n");
+  else count=0;
   return pfiles;
 }
 

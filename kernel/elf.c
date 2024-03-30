@@ -137,3 +137,40 @@ void load_bincode_from_host_elf(process *p, char *filename) {
 
   sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
 }
+
+int exec(process* p, const char *path, const char *para){
+    sprint("Application: %s\n", path);
+    elf_ctx elfloader;
+    elf_info info;
+    info.f = vfs_open(path, O_RDONLY);
+    info.p = p;
+    if (IS_ERR_VALUE(info.f)) panic("Fail in exec\n");
+    if (elf_init(&elfloader, &info) != EL_OK)
+        panic("Fail in exec\n");
+    if (elf_load(&elfloader) != EL_OK) panic("Fail in exec\n");
+    p->trapframe->epc = elfloader.ehdr.entry;
+    vfs_close( info.f );
+
+    const int args_count = 5;
+    uint64 ustack[args_count];
+    uint64 esp = p->trapframe->regs.sp;
+
+    // 计算字符串参数的长度，并将esp对齐到16字节边界
+    size_t para_len = strlen(para) + 1;
+    esp -= para_len;
+    esp -= esp % 16;
+
+    // 将参数复制到用户栈
+    memcpy(user_va_to_pa(p->pagetable, (void*)esp), para, para_len);
+    ustack[0] = esp;
+
+    // 将其他参数压入用户栈，并更新esp和a1寄存器
+    size_t ustack_size = (args_count + 1) * sizeof(uint64);
+    esp -= ustack_size;
+    esp -= esp % 16;
+    memcpy(user_va_to_pa(p->pagetable, (void*)esp), (char*)ustack, ustack_size);
+    p->trapframe->regs.a1 = esp;
+    p->trapframe->regs.sp = esp;
+    sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
+    return 1;
+}
