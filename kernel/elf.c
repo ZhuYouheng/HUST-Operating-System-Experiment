@@ -9,9 +9,10 @@
 #include "vmm.h"
 #include "pmm.h"
 #include "spike_interface/spike_utils.h"
+#include "vfs.h"
 
 typedef struct elf_info_t {
-  spike_file_t *f;
+  struct file *f;
   process *p;
 } elf_info;
 
@@ -41,7 +42,8 @@ static uint64 elf_fpread(elf_ctx *ctx, void *dest, uint64 nb, uint64 offset) {
   // call spike file utility to load the content of elf file into memory.
   // spike_file_pread will read the elf file (msg->f) from offset to memory (indicated by
   // *dest) for nb bytes.
-  return spike_file_pread(msg->f, dest, nb, offset);
+  vfs_lseek(msg->f,offset,SEEK_SET);
+  return vfs_read(msg->f, dest, nb);
 }
 
 //
@@ -150,10 +152,10 @@ void load_bincode_from_host_elf(process *p) {
   // elf_info is defined above, used to tie the elf file and its corresponding process.
   elf_info info;
 
-  info.f = spike_file_open(arg_bug_msg.argv[0], O_RDONLY, 0);
+  info.f = vfs_open(arg_bug_msg.argv[0],O_RDONLY);
   info.p = p;
   // IS_ERR_VALUE is a macro defined in spike_interface/spike_htif.h
-  if (IS_ERR_VALUE(info.f)) panic("Fail on openning the input application program.\n");
+  if(info.f == NULL) panic("Fail on openning the input application program.\n");
 
   // init elfloader context. elf_init() is defined above.
   if (elf_init(&elfloader, &info) != EL_OK)
@@ -166,7 +168,26 @@ void load_bincode_from_host_elf(process *p) {
   p->trapframe->epc = elfloader.ehdr.entry;
 
   // close the host spike file
-  spike_file_close( info.f );
+  vfs_close(info.f);
 
   sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
+}
+
+int exec(const char *pathname,process* p){
+    elf_ctx elfloader;
+    elf_info info;
+    info.f = vfs_open(pathname,O_RDONLY);
+    info.p = p;
+    if(info.f == NULL){
+        return -1;
+    }
+    else if (elf_init(&elfloader, &info) != EL_OK){
+        return -1;
+    }
+    else if (elf_load(&elfloader) != EL_OK){
+        return -1;
+    }
+    p->trapframe->epc = elfloader.ehdr.entry;
+    vfs_close(info.f);
+    return 0;
 }

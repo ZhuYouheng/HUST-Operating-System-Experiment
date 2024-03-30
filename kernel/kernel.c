@@ -40,7 +40,7 @@ void enable_paging() {
 process* load_user_program() {
   process* proc;
 
-  proc = alloc_process();
+  proc = alloc_process(0);
   sprint("User application is loading.\n");
 
   load_bincode_from_host_elf(proc);

@@ -86,7 +86,7 @@ void init_proc_pool() {
 // allocate an empty process, init its vm space. returns the pointer to
 // process strcuture. added @lab3_1
 //
-process* alloc_process() {
+process* alloc_process(int mod) {
   // locate the first usable process structure
   int i;
 
@@ -135,7 +135,7 @@ process* alloc_process() {
   procs[i].mapped_info[SYSTEM_SEGMENT].va = (uint64)trap_sec_start;
   procs[i].mapped_info[SYSTEM_SEGMENT].npages = 1;
   procs[i].mapped_info[SYSTEM_SEGMENT].seg_type = SYSTEM_SEGMENT;
-
+  if(mod == 0)
   sprint("in alloc_proc. user frame 0x%lx, user stack 0x%lx, user kstack 0x%lx \n",
     procs[i].trapframe, procs[i].trapframe->regs.sp, procs[i].kstack);
 
@@ -153,6 +153,7 @@ process* alloc_process() {
 
   // initialize files_struct
   procs[i].pfiles = init_proc_file_management();
+  if(mod == 0)
   sprint("in alloc_proc. build proc_file_management successfully.\n");
 
   // return after initialization.
@@ -182,20 +183,20 @@ int free_process( process* proc ) {
 int do_fork( process* parent)
 {
   sprint( "will fork a child from parent %d.\n", parent->pid );
-  process* child = alloc_process();
+  process* child = alloc_process(0);
 
   for( int i=0; i<parent->total_mapped_region; i++ ){
     // browse parent's vm space, and copy its trapframe and data segments,
     // map its code segment.
     switch( parent->mapped_info[i].seg_type ){
-      case CONTEXT_SEGMENT:
+      case CONTEXT_SEGMENT:{
         *child->trapframe = *parent->trapframe;
-        break;
-      case STACK_SEGMENT:
+      }  break;
+      case STACK_SEGMENT:{
         memcpy( (void*)lookup_pa(child->pagetable, child->mapped_info[STACK_SEGMENT].va),
           (void*)lookup_pa(parent->pagetable, parent->mapped_info[i].va), PGSIZE );
-        break;
-      case HEAP_SEGMENT:
+      }  break;
+      case HEAP_SEGMENT:{
         // build a same heap for child process.
 
         // convert free_pages_address into a filter to skip reclaimed blocks in the heap
@@ -224,8 +225,8 @@ int do_fork( process* parent)
 
         // copy the heap manager from parent to child
         memcpy((void*)&child->user_heap, (void*)&parent->user_heap, sizeof(parent->user_heap));
-        break;
-      case CODE_SEGMENT:
+      }  break;
+      case CODE_SEGMENT:{
         // TODO (lab3_1): implment the mapping of child code segment to parent's
         // code segment.
         // hint: the virtual address mapping of code segment is tracked in mapped_info
@@ -248,7 +249,7 @@ int do_fork( process* parent)
           parent->mapped_info[i].npages;
         child->mapped_info[child->total_mapped_region].seg_type = CODE_SEGMENT;
         child->total_mapped_region++;
-        break;
+      }  break;
     }
   }
 
