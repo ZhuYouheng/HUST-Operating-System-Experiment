@@ -1,7 +1,7 @@
 /*
  * Supervisor-mode startup codes
  */
-
+#include "sync_utils.h"
 #include "riscv.h"
 #include "string.h"
 #include "elf.h"
@@ -10,18 +10,15 @@
 #include "vmm.h"
 #include "memlayout.h"
 #include "spike_interface/spike_utils.h"
-#include "kernel/sync_utils.h"
-#include "spike_interface/atomic.h"
+
 // process is a structure defined in kernel/process.h
 process user_app[NCPU];
-spinlock_t print_lock;
-spinlock_t print_lock_1;
 //
 // trap_sec_start points to the beginning of S-mode trap segment (i.e., the entry point of
 // S-mode trap vector). added @lab2_1
 //
 extern char trap_sec_start[];
-volatile static int cpu_sync_counter = 0;
+
 //
 // turn on paging. added @lab2_1
 //
@@ -79,13 +76,13 @@ void load_user_program(process *proc) {
   user_vm_map((pagetable_t)proc->pagetable, (uint64)trap_sec_start, PGSIZE, (uint64)trap_sec_start,
          prot_to_type(PROT_READ | PROT_EXEC, 0));
 }
-
+volatile static int cpu_sync_counter = 0;
 //
 // s_start: S-mode entry point of riscv-pke OS kernel.
 //
 int s_start(void) {
-  uint64 cur_tp = read_tp();
-  sprint("hartid = %d: Enter supervisor mode...\n",cur_tp);
+  int cur_tp = read_tp();
+  sprint("hartid = %d: Enter supervisor mode...\n", cur_tp);
   // in the beginning, we use Bare mode (direct) memory mapping as in lab1.
   // but now, we are going to switch to the paging mode @lab2_1.
   // note, the code still works in Bare mode when calling pmm_init() and kern_vm_init().
@@ -110,7 +107,7 @@ int s_start(void) {
   
   uint64 hartid = cur_tp;
   
-  vm_alloc_stage[hartid] = 1;
+ vm_alloc_stage[cur_tp] = 1;
   // switch_to() is defined in kernel/process.c
   switch_to(&user_app[cur_tp]);
 

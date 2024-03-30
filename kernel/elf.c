@@ -9,14 +9,12 @@
 #include "vmm.h"
 #include "pmm.h"
 #include "spike_interface/spike_utils.h"
-#include "kernel/sync_utils.h"
-#include "spike_interface/atomic.h"
-volatile static int cpu_sync_counter = 0;
+
 typedef struct elf_info_t {
   spike_file_t *f;
   process *p;
 } elf_info;
-extern spinlock_t print_lock;
+
 //
 // the implementation of allocater. allocates memory space for later segment loading.
 // this allocater is heavily modified @lab2_1, where we do NOT work in bare mode.
@@ -120,14 +118,13 @@ static size_t parse_args(arg_buf *arg_bug_msg) {
 //
 void load_bincode_from_host_elf(process *p) {
   arg_buf arg_bug_msg;
-
+  int cur_tp = read_tp();
   // retrieve command line arguements
   size_t argc = parse_args(&arg_bug_msg);
   if (!argc) panic("You need to specify the application program!\n");
 
-  uint64 cpu_for_process = read_tp();
   //sync_barrier(&cpu_sync_counter,NCPU);
-  sprint("hartid = %d: Application: %s\n", cpu_for_process,arg_bug_msg.argv[cpu_for_process]);
+  sprint("hartid = %d: Application: %s\n", cur_tp,arg_bug_msg.argv[cur_tp]);
   //spinlock_unlock(&print_lock);
   //sync_barrier(&cpu_sync_counter,NCPU);
   //elf loading. elf_ctx is defined in kernel/elf.h, used to track the loading process.
@@ -135,7 +132,7 @@ void load_bincode_from_host_elf(process *p) {
   // elf_info is defined above, used to tie the elf file and its corresponding process.
   elf_info info;
 
-  info.f = spike_file_open(arg_bug_msg.argv[cpu_for_process], O_RDONLY, 0);
+  info.f = spike_file_open(arg_bug_msg.argv[cur_tp], O_RDONLY, 0);
   info.p = p;
   // IS_ERR_VALUE is a macro defined in spike_interface/spike_htif.h
   if (IS_ERR_VALUE(info.f)) panic("Fail on openning the input application program.\n");
@@ -153,5 +150,5 @@ void load_bincode_from_host_elf(process *p) {
   // close the host spike file
   spike_file_close( info.f );
 
-  sprint("hartid = %d: Application program entry point (virtual address): 0x%lx\n", cpu_for_process,p->trapframe->epc);
+    sprint("hartid = %d: Application program entry point (virtual address): 0x%lx\n", cur_tp, p->trapframe->epc);
 }

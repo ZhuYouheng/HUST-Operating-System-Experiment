@@ -30,7 +30,7 @@ extern uint64 g_mem_size;
 // struct riscv_regs is define in kernel/riscv.h, and g_itrframe is used to save
 // registers when interrupt hapens in M mode. added @lab1_2
 riscv_regs g_itrframe[NCPU];
-volatile static int cpu_sync_counter = 0;
+volatile static int cpu_sync_start_counter = 0;
 
 //
 // get the information of HTIF (calling interface) and the emulated memory by
@@ -105,7 +105,7 @@ void m_start(uintptr_t hartid, uintptr_t dtb) {
     init_dtb(dtb);
   }
 
-  sync_barrier(&cpu_sync_counter, NCPU);
+  sync_barrier(&cpu_sync_start_counter, NCPU);
   sprint("In m_start, hartid:%d\n", hartid);
 
   // init HTIF (Host-Target InterFace) and memory by using the Device Table Blob (DTB)

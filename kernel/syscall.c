@@ -13,10 +13,7 @@
 #include "pmm.h"
 #include "vmm.h"
 #include "spike_interface/spike_utils.h"
-#include "kernel/sync_utils.h"
-#include "spike_interface/atomic.h"
-volatile static int cpu_sync_counter = 0;
-extern spinlock_t list_lock;
+#include "sync_utils.h"
 //
 // implement the SYS_user_print syscall
 //
@@ -29,21 +26,24 @@ ssize_t sys_user_print(const char* buf, size_t n) {
   sprint(pa);
   return 0;
 }
-
+volatile static int exit_counter = 0;
 //
 // implement the SYS_user_exit syscall
 //
 ssize_t sys_user_exit(uint64 code) {
-  uint64 cur_tp = read_tp();
-  sprint("hartid = %d: User exit with code:%d.\n", cur_tp,code);
-  // in lab1, PKE considers only one app (one process).
-  sync_barrier(&cpu_sync_counter, NCPU);
-  if(cur_tp != 0) return 0;
-  sprint("hartid = %d: shutdown with code:%d.\n", cur_tp,code);
-  shutdown(code);
+ int cpuid = read_tp();
+  sprint("hartid = %d: User exit with code: %d.\n", cpuid, code);
+
+  sync_barrier(&exit_counter, NCPU);
+  // in lab1, PKE considers only one app (one process). 
+  // therefore, shutdown the system when the app calls exit()
+  if (cpuid == 0) {
+    sprint("hartid = %d: shutdown with code: %d.\n", cpuid, code);
+    shutdown(code);    
+  }
+  return 0;
 }
-extern spinlock_t print_lock;
-extern spinlock_t print_lock_1;
+
 //
 // maybe, the simplest implementation of malloc in the world ... added @lab2_2
 //
